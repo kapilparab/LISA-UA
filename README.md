@@ -330,4 +330,10 @@ If you find this project useful in your research, please consider citing:
 ```
 
 ## Acknowledgement
--  This work is built upon the [LLaVA](https://github.com/haotian-liu/LLaVA) and [SAM](https://github.com/facebookresearch/segment-anything). 
+-  This work is built upon the [LLaVA](https://github.com/haotian-liu/LLaVA) and [SAM](https://github.com/facebookresearch/segment-anything).
+
+## UA Lisa Guide
+
+1. Clone repository
+2. Run "pip install -U bitsandbytes".
+3. Execute "python chat.py --version='xinlai/LISA-13B-llama2-v1' --load_in_4bit" in terminal.
