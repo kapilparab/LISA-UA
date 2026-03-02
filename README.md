@@ -129,7 +129,11 @@ For more details, please refer to the [paper](https://arxiv.org/abs/2308.00692).
 ## Installation
 ```
 pip install -r requirements.txt
+```
+`flash-attn` and `deepspeed` are optional. Install them only if you need accelerated training/inference:
+```
 pip install flash-attn --no-build-isolation
+pip install deepspeed
 ```
 
 ## Training
@@ -278,8 +282,8 @@ The results should be like:
 
 ## Deployment
 ```
-CUDA_VISIBLE_DEVICES=0 python app.py --version='xinlai/LISA-13B-llama2-v1 --load_in_4bit'
-CUDA_VISIBLE_DEVICES=0 python app.py --version='xinlai/LISA-13B-llama2-v1-explanatory --load_in_4bit'
+CUDA_VISIBLE_DEVICES=0 python app.py --version='xinlai/LISA-13B-llama2-v1' --load_in_4bit
+CUDA_VISIBLE_DEVICES=0 python app.py --version='xinlai/LISA-13B-llama2-v1-explanatory' --load_in_4bit
 ```
 By default, we use 4-bit quantization. Feel free to delete the `--load_in_4bit` argument for 16-bit inference or replace it with `--load_in_8bit` argument for 8-bit inference.
 

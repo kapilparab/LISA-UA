@@ -13,6 +13,7 @@
 #    limitations under the License.
 
 
+import inspect
 from typing import List, Optional, Tuple, Union
 
 import torch
@@ -38,6 +39,7 @@ class LlavaLlamaModel(LlavaMetaModel, LlamaModel):
 
 class LlavaLlamaForCausalLM(LlamaForCausalLM, LlavaMetaForCausalLM):
     config_class = LlavaConfig
+    _llama_forward_argnames = set(inspect.signature(LlamaModel.forward).parameters)
 
     def __init__(self, config):
         super(LlamaForCausalLM, self).__init__(config)
@@ -57,6 +59,8 @@ class LlavaLlamaForCausalLM(LlamaForCausalLM, LlavaMetaForCausalLM):
         input_ids: torch.LongTensor = None,
         attention_mask: Optional[torch.Tensor] = None,
         past_key_values: Optional[List[torch.FloatTensor]] = None,
+        position_ids: Optional[torch.LongTensor] = None,
+        cache_position: Optional[torch.LongTensor] = None,
         inputs_embeds: Optional[torch.FloatTensor] = None,
         labels: Optional[torch.LongTensor] = None,
         use_cache: Optional[bool] = None,
@@ -64,6 +68,7 @@ class LlavaLlamaForCausalLM(LlamaForCausalLM, LlavaMetaForCausalLM):
         output_hidden_states: Optional[bool] = None,
         images: Optional[torch.FloatTensor] = None,
         return_dict: Optional[bool] = None,
+        **kwargs,
     ) -> Union[Tuple, CausalLMOutputWithPast]:
         output_attentions = (
             output_attentions
@@ -90,16 +95,27 @@ class LlavaLlamaForCausalLM(LlamaForCausalLM, LlavaMetaForCausalLM):
         )
         # decoder outputs consists of (dec_features, layer_state, dec_hidden, dec_attn)
 
-        outputs = self.model(
+        model_kwargs = dict(
             input_ids=input_ids,
             attention_mask=attention_mask,
             past_key_values=past_key_values,
             inputs_embeds=inputs_embeds,
+            position_ids=position_ids,
             use_cache=use_cache,
             output_attentions=output_attentions,
             output_hidden_states=output_hidden_states,
             return_dict=return_dict,
         )
+        # `cache_position` and a few generation kwargs appear only in newer
+        # Transformers releases; pass only arguments supported by the local version.
+        if cache_position is not None:
+            model_kwargs["cache_position"] = cache_position
+
+        for key, value in kwargs.items():
+            if key in self._llama_forward_argnames:
+                model_kwargs[key] = value
+
+        outputs = self.model(**model_kwargs)
 
         hidden_states = outputs[0]
         logits = self.lm_head(hidden_states)
@@ -143,7 +159,7 @@ class LlavaLlamaForCausalLM(LlamaForCausalLM, LlavaMetaForCausalLM):
         images=None,
         **kwargs
     ):
-        if past_key_values:
+        if past_key_values is not None:
             input_ids = input_ids[:, -1:]
 
         # if `inputs_embeds` are passed, we only want to use them in the 1st generation step
@@ -160,6 +176,12 @@ class LlavaLlamaForCausalLM(LlamaForCausalLM, LlavaMetaForCausalLM):
                 "images": images,
             }
         )
+        if kwargs.get("position_ids", None) is not None:
+            model_inputs["position_ids"] = kwargs["position_ids"]
+        if kwargs.get("cache_position", None) is not None:
+            model_inputs["cache_position"] = kwargs["cache_position"]
+        if kwargs.get("token_type_ids", None) is not None:
+            model_inputs["token_type_ids"] = kwargs["token_type_ids"]
         return model_inputs
 
 
@@ -168,6 +190,10 @@ class LlavaLlamaForCausalLM(LlamaForCausalLM, LlavaMetaForCausalLM):
 from transformers.models.auto.configuration_auto import CONFIG_MAPPING
 
 if "llava" not in CONFIG_MAPPING:
-  AutoConfig.register("llava", LlavaConfig)
+    AutoConfig.register("llava", LlavaConfig)
 
-AutoModelForCausalLM.register(LlavaConfig, LlavaLlamaForCausalLM)
+try:
+    AutoModelForCausalLM.register(LlavaConfig, LlavaLlamaForCausalLM)
+except ValueError:
+    # Registration can already exist in notebook/runtime reload scenarios.
+    pass

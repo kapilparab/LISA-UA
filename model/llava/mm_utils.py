@@ -77,7 +77,7 @@ class KeywordsStoppingCriteria(StoppingCriteria):
             keyword_id.to(output_ids.device) for keyword_id in self.keyword_ids
         ]
         for keyword_id in self.keyword_ids:
-            if output_ids[0, -keyword_id.shape[0] :] == keyword_id:
+            if torch.equal(output_ids[0, -keyword_id.shape[0] :], keyword_id):
                 return True
         outputs = self.tokenizer.batch_decode(
             output_ids[:, -offset:], skip_special_tokens=True

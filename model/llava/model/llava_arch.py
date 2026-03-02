@@ -106,11 +106,27 @@ class LlavaMetaForCausalLM(ABC):
                 and images is not None
                 and input_ids.shape[1] == 1
             ):
-                attention_mask = torch.ones(
-                    (attention_mask.shape[0], past_key_values[-1][-1].shape[-2] + 1),
-                    dtype=attention_mask.dtype,
-                    device=attention_mask.device,
-                )
+                # `past_key_values` is a tuple on older Transformers versions and a Cache
+                # object on newer versions. Handle both forms when extending attention masks.
+                past_kv_len = 0
+                if hasattr(past_key_values, "get_seq_length"):
+                    try:
+                        seq_len = past_key_values.get_seq_length()
+                    except TypeError:
+                        seq_len = None
+                    if seq_len is not None:
+                        past_kv_len = int(seq_len)
+                elif hasattr(past_key_values, "seen_tokens"):
+                    past_kv_len = int(past_key_values.seen_tokens)
+                else:
+                    past_kv_len = int(past_key_values[-1][-1].shape[-2])
+
+                if attention_mask is not None:
+                    attention_mask = torch.ones(
+                        (attention_mask.shape[0], past_kv_len + 1),
+                        dtype=attention_mask.dtype,
+                        device=attention_mask.device,
+                    )
             return input_ids, attention_mask, past_key_values, None, labels
 
         if type(images) is list or images.ndim == 5:

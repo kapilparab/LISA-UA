@@ -130,16 +130,25 @@ def main(args):
     ):
         vision_tower = model.get_model().get_vision_tower()
         model.model.vision_tower = None
-        import deepspeed
+        try:
+            import deepspeed
 
-        model_engine = deepspeed.init_inference(
-            model=model,
-            dtype=torch.half,
-            replace_with_kernel_inject=True,
-            replace_method="auto",
-        )
-        model = model_engine.module
-        model.model.vision_tower = vision_tower.half().cuda()
+            model_engine = deepspeed.init_inference(
+                model=model,
+                dtype=torch.half,
+                replace_with_kernel_inject=True,
+                replace_method="auto",
+            )
+            model = model_engine.module
+            model.model.vision_tower = vision_tower.half().cuda()
+        except Exception as e:
+            # Deepspeed is optional for inference; fall back to native fp16 loading.
+            print(
+                "Deepspeed inference init failed; falling back to native fp16.",
+                str(e),
+            )
+            model.model.vision_tower = vision_tower
+            model = model.half().cuda()
     elif args.precision == "fp32":
         model = model.float().cuda()
 
