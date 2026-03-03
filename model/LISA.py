@@ -471,18 +471,46 @@ class LISAForCausalLM(LlavaLlamaForCausalLM):
                 input_ids=input_ids,
                 max_new_tokens=max_new_tokens,
                 num_beams=1,
-                output_hidden_states=True,
                 return_dict_in_generate=True,
             )
-            output_hidden_states = outputs.hidden_states[-1]
             output_ids = outputs.sequences
 
+            # Newer Transformers versions return generation hidden states in a
+            # step-wise nested format. Re-run a full forward pass on the final
+            # sequence to get token-aligned hidden states.
+            forward_outputs = super().forward(
+                input_ids=output_ids,
+                attention_mask=output_ids.ne(self.config.pad_token_id),
+                images=images_clip,
+                output_hidden_states=True,
+                return_dict=True,
+                use_cache=False,
+            )
+            output_hidden_states = forward_outputs.hidden_states
+            if isinstance(output_hidden_states, (tuple, list)):
+                output_hidden_states = output_hidden_states[-1]
+
             seg_token_mask = output_ids[:, 1:] == self.seg_token_idx
+            seg_token_mask = torch.cat(
+                [
+                    seg_token_mask,
+                    torch.zeros(
+                        (seg_token_mask.shape[0], 1),
+                        dtype=torch.bool,
+                        device=seg_token_mask.device,
+                    ),
+                ],
+                dim=1,
+            )
             # hack for IMAGE_TOKEN_INDEX (we suppose that there is only one image, and it is in the front)
             image_token_len = (images_clip.shape[2] // 14) * (images_clip.shape[3] // 14)
             seg_token_mask = torch.cat(
                 [
-                    torch.zeros((seg_token_mask.shape[0], image_token_len-1)).bool().cuda(),
+                    torch.zeros(
+                        (seg_token_mask.shape[0], image_token_len - 1),
+                        dtype=torch.bool,
+                        device=seg_token_mask.device,
+                    ),
                     seg_token_mask,
                 ],
                 dim=1,
