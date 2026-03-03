@@ -502,12 +502,16 @@ class LISAForCausalLM(LlavaLlamaForCausalLM):
                 ],
                 dim=1,
             )
-            # hack for IMAGE_TOKEN_INDEX (we suppose that there is only one image, and it is in the front)
-            image_token_len = (images_clip.shape[2] // 14) * (images_clip.shape[3] // 14)
+            # Align the [SEG] mask to multimodal-expanded hidden-state length.
+            # The prefix length depends on the actual vision tower output and can
+            # vary across model/transformers versions.
+            image_token_prefix_len = output_hidden_states.shape[1] - output_ids.shape[1]
+            if image_token_prefix_len < 0:
+                image_token_prefix_len = 0
             seg_token_mask = torch.cat(
                 [
                     torch.zeros(
-                        (seg_token_mask.shape[0], image_token_len - 1),
+                        (seg_token_mask.shape[0], image_token_prefix_len),
                         dtype=torch.bool,
                         device=seg_token_mask.device,
                     ),
