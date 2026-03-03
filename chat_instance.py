@@ -15,7 +15,6 @@ from model.segment_anything.utils.transforms import ResizeLongestSide
 from utils.utils import (DEFAULT_IM_END_TOKEN, DEFAULT_IM_START_TOKEN,
                          DEFAULT_IMAGE_TOKEN, IMAGE_TOKEN_INDEX)
 
-
 def parse_args(args):
     parser = argparse.ArgumentParser(description="LISA chat")
     parser.add_argument("--version", default="xinlai/LISA-13B-llama2-v1")
@@ -36,7 +35,8 @@ def parse_args(args):
     parser.add_argument("--local-rank", default=0, type=int, help="node rank")
     parser.add_argument("--load_in_8bit", action="store_true", default=False)
     parser.add_argument("--load_in_4bit", action="store_true", default=False)
-    parser.add_argument("--use_mm_start_end", action="store_true", default=True)
+    parser.add_argument("--use_mm_start_end", action="store_true")
+    # parser.add_argument("--use_mm_start_end", action="store_true", default=True)
     parser.add_argument(
         "--conv_type",
         default="llava_v1",
@@ -232,31 +232,68 @@ def main(args):
         text_output = text_output.replace("\n", "").replace("  ", " ")
         print("text_output: ", text_output)
 
-        for i, pred_mask in enumerate(pred_masks):
-            if pred_mask.shape[0] == 0:
-                continue
+        print("len(pred_masks): ", len(pred_masks))
+        print("[x.shape for x in pred_masks]: ", [x.shape for x in pred_masks])
+        
+        visualize(args, pred_masks, image_path, image_np)
 
-            pred_mask = pred_mask.detach().cpu().numpy()[0]
-            pred_mask = pred_mask > 0
+def save_mask_as_image(pred_mask, hex_color, file_path):
+    """
+    Save a boolean mask as an image, coloring True values with the specified color.
 
-            save_path = "{}/{}_mask_{}.jpg".format(
-                args.vis_save_path, image_path.split("/")[-1].split(".")[0], i
-            )
-            cv2.imwrite(save_path, pred_mask * 100)
-            print("{} has been saved.".format(save_path))
+    :param pred_mask: A 2D numpy array of boolean values.
+    :param hex_color: String of the color in hexadecimal format (e.g., '#FF5733').
+    :param file_path: Path to save the image file.
+    """
+    # Convert hex color to BGR
+    hex_color = hex_color.lstrip('#')
+    rgb_color = tuple(int(hex_color[i:i+2], 16) for i in (0, 2, 4))
+    bgr_color = rgb_color[::-1]
 
-            save_path = "{}/{}_masked_img_{}.jpg".format(
-                args.vis_save_path, image_path.split("/")[-1].split(".")[0], i
-            )
-            save_img = image_np.copy()
-            save_img[pred_mask] = (
-                image_np * 0.5
-                + pred_mask[:, :, None].astype(np.uint8) * np.array([255, 0, 0]) * 0.5
-            )[pred_mask]
-            save_img = cv2.cvtColor(save_img, cv2.COLOR_RGB2BGR)
-            cv2.imwrite(save_path, save_img)
-            print("{} has been saved.".format(save_path))
+    # Create an image from the mask
+    image = np.zeros((pred_mask.shape[0], pred_mask.shape[1], 3), dtype=np.uint8)
+    for i, color in enumerate(bgr_color):
+        image[pred_mask, i] = color
 
+    # Save the image
+    cv2.imwrite(file_path, image)
 
+def visualize(args, pred_masks, image_path, image_np):
+    def hex_to_rgb(hex_color):
+        hex_color = hex_color.lstrip('#')
+        lv = len(hex_color)
+        return tuple(int(hex_color[i:i + lv // 3], 16) for i in range(0, lv, lv // 3))
+    colormap = ["#1f77b4","#d62728","#ff7f0e","#2ca02c","#9467bd","#8c564b","#e377c2",\
+                "#7f7f7f","#bcbd22","#17becf","#9467bd","#8c564b","#e377c2","#7f7f7f","#bcbd22","#17becf", \
+                "#1f77b4","#41340e","#2ca02c","#b62728","#9467bd","#8ff64b","#e377c2","#7f7faa","#bcbd22","#17baaf"]
+    colormap_rgb = [hex_to_rgb(color) for color in colormap]
+    save_path_tot = "{}/{}_masked_img.jpg".format(
+        args.vis_save_path, image_path.split("/")[-1].split(".")[0]
+    )
+    save_img = image_np.copy()
+    
+    for i, pred_mask in enumerate(pred_masks[0]):
+        if pred_mask.shape[0] == 0:
+            continue
+
+        pred_mask = pred_mask.detach().cpu().numpy()#[0]
+        pred_mask = pred_mask > 0
+
+        save_path = "{}/{}_mask_{}.jpg".format(
+            args.vis_save_path, image_path.split("/")[-1].split(".")[0], i
+        )
+        cv2.imwrite(save_path, pred_mask * 100)
+        print("{} has been saved.".format(save_path))
+        
+        save_img[pred_mask] = (
+            image_np * 0.5
+            + pred_mask[:, :, None].astype(np.uint8) * np.array(colormap_rgb[i % len(colormap_rgb)]) * 0.5
+        )[pred_mask]
+    save_img = cv2.cvtColor(save_img, cv2.COLOR_RGB2BGR)
+    cv2.imwrite(save_path_tot, save_img)
+    print("{} has been saved.".format(save_path_tot))
+    
+    
+    
 if __name__ == "__main__":
     main(sys.argv[1:])

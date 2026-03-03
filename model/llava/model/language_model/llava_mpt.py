@@ -83,7 +83,6 @@ class LlavaMPTForCausalLM(MPTForCausalLM, LlavaMetaForCausalLM):
         output_hidden_states: Optional[bool] = None,
         use_cache: Optional[bool] = None,
         images=None,
-        **kwargs,
     ):
         return_dict = (
             return_dict if return_dict is not None else self.config.return_dict
@@ -171,13 +170,5 @@ class LlavaMPTForCausalLM(MPTForCausalLM, LlavaMetaForCausalLM):
         }
 
 
-from transformers.models.auto.configuration_auto import CONFIG_MAPPING
-
-if "llava_mpt" not in CONFIG_MAPPING:
-    AutoConfig.register("llava_mpt", LlavaMPTConfig)
-
-try:
-    AutoModelForCausalLM.register(LlavaMPTConfig, LlavaMPTForCausalLM)
-except ValueError:
-    # Registration can already exist in notebook/runtime reload scenarios.
-    pass
+AutoConfig.register("llava_mpt", LlavaMPTConfig)
+AutoModelForCausalLM.register(LlavaMPTConfig, LlavaMPTForCausalLM)
