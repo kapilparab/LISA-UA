@@ -166,6 +166,19 @@ class LlavaLlamaForCausalLM(LlamaForCausalLM, LlavaMetaForCausalLM):
         elif correct_emb is not None and if_inference is not None:
             inputs_embeds = self.process_embeds_inference(raw_input_ids, inputs_embeds, correct_emb)
 
+        seq_len = None
+        if inputs_embeds is not None:
+            seq_len = inputs_embeds.shape[1]
+        elif input_ids is not None:
+            seq_len = input_ids.shape[1]
+
+        # Generation on newer Transformers may pass position/cache ids based on the
+        # pre-tokenization length; multimodal expansion changes sequence length.
+        if position_ids is not None and seq_len is not None and position_ids.shape[-1] != seq_len:
+            position_ids = None
+        if cache_position is not None and seq_len is not None and cache_position.shape[-1] != seq_len:
+            cache_position = None
+
         # decoder outputs consists of (dec_features, layer_state, dec_hidden, dec_attn)
         model_kwargs = dict(
             input_ids=input_ids,
@@ -267,7 +280,6 @@ class LlavaLlamaForCausalLM(LlamaForCausalLM, LlavaMetaForCausalLM):
         if_inference=None,
         **kwargs
     ):
-        past_key_values=None
         if past_key_values is not None:
             input_ids = input_ids[:, -1:]
 
